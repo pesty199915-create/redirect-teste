@@ -1,724 +1,375 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
-  <title>Verificação de segurança</title>
-  
-  <!-- ============================================================
-  DETECÇÃO E TELA DE CARREGAMENTO
-  ============================================================ -->
-  <script>
-    // ============================================================
-    // CONFIGURAÇÕES
-    // ============================================================
-    
-    const OFFER_URL = "https://apextry.com/go/kwai18";
-    const DECOY_URL = "https://www.sephora.com.br/cabelos/";
-    const LOADING_TIME = 3000; // 3 segundos
-    
-    // ============================================================
-    // FUNÇÕES DE DETECÇÃO
-    // ============================================================
-    
-    function isMobileDevice() {
-      const ua = navigator.userAgent.toLowerCase();
-      
-      const mobileKeywords = [
-        'android', 'iphone', 'ipod', 'ipad', 
-        'windows phone', 'mobile', 'blackberry', 
-        'opera mini', 'opera mobi', 'iemobile'
-      ];
-      
-      for (let kw of mobileKeywords) {
-        if (ua.includes(kw)) return true;
-      }
-      
-      if (ua.includes('ipad') || (ua.includes('macintosh') && 'ontouchstart' in window)) {
-        return true;
-      }
-      
-      if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
-        const desktopUA = ['windows nt', 'mac os x', 'linux x86'];
-        let isDesktopUA = false;
-        for (let os of desktopUA) {
-          if (ua.includes(os)) isDesktopUA = true;
-        }
-        if (!isDesktopUA) return true;
-      }
-      
-      return false;
-    }
-    
-    function isBotUserAgent() {
-      const ua = navigator.userAgent.toLowerCase();
-      
-      const botsPatterns = [
-        'googlebot', 'google-inspectiontool', 'google favicon',
-        'facebookexternalhit', 'facebot', 'meta-externalagent', 'meta-inspector', 'meta-reviewer',
-        'twitterbot', 'linkedinbot', 'slackbot', 'discordbot',
-        'telegrambot', 'whatsapp', 'baiduspider', 'yandexbot',
-        'bingbot', 'duckduckbot', 'applebot', 'rogerbot',
-        'ahrefsbot', 'semrushbot', 'mj12bot', 'dotbot',
-        'petalbot', 'pinterest', 'redditbot', 'tumblr',
-        'mediapartners-google', 'adsbot-google', 'google-read-aloud',
-        'headless', 'phantomjs', 'selenium', 'puppeteer',
-        'crawler', 'spider', 'scraper', 'bot/', 'crawl',
-        'kwai', 'tiktok', 'bytebot', 'bytedance', 'douyin',
-        'facebook', 'instagram', 'meta-external',
-        'snapchat', 'pinterest', 'reddit',
-        'ad preview', 'advalidator', 'adchecker',
-        'brand safety', 'ad verification', 'ias',
-        'doubleclick', 'googleads', 'google-ads',
-        'outbrain', 'taboola', 'mgid', 'revcontent',
-        'whatsapp', 'telegram', 'line', 'viber'
-      ];
-      
-      for (let pattern of botsPatterns) {
-        if (ua.includes(pattern)) {
-          return true;
-        }
-      }
-      
-      return false;
-    }
-    
-    function isHeadless() {
-      if (navigator.webdriver === true) return true;
-      if (navigator.userAgent.includes('HeadlessChrome')) return true;
-      if (navigator.userAgent.includes('PhantomJS')) return true;
-      return false;
-    }
-    
-    function isAdVerifier() {
-      const params = new URLSearchParams(window.location.search);
-      
-      const adParams = ['__ad__', '__adid__', '__cmpn__', '__creative__', 'ad_preview', 'ad_test'];
-      for (let p of adParams) {
-        if (params.has(p)) return true;
-      }
-      
-      if (params.has('kwai_click_id') && params.get('kwai_click_id') === '__CALLBACK__') {
-        return true;
-      }
-      
-      return false;
-    }
-    
-    function isFastLoad() {
-      if (performance && performance.timing) {
-        const loadTime = performance.timing.loadEventEnd - performance.timing.navigationStart;
-        return loadTime < 50;
-      }
-      return false;
-    }
-    
-    function isLocalStorageBlocked() {
-      try {
-        localStorage.setItem('test_cloak', '1');
-        localStorage.removeItem('test_cloak');
-        return false;
-      } catch(e) {
-        return true;
-      }
-    }
-    
-    function isSuspiciousResolution() {
-      const width = window.screen.width;
-      const height = window.screen.height;
-      
-      const suspicious = [
-        [1024, 768], [800, 600], [1280, 720], [1366, 768], [1920, 1080]
-      ];
-      
-      for (let res of suspicious) {
-        if (width === res[0] && height === res[1]) return true;
-      }
-      
-      return false;
-    }
-    
-    // ============================================================
-    // CAPTURA DE PARÂMETROS (igual à sua pressel atual)
-    // ============================================================
-    
-    function captureParams() {
-      var urlParams = new URLSearchParams(window.location.search);
-      
-      var paramKeys = [
-        'utm_source', 'utm_medium', 'utm_campaign',
-        'utm_content', 'utm_term', 'utm_id',
-        'fbclid', 'gclid', 'click_id', 'kwai_click_id',
-        'msclkid', 'ttclid', '_fbp', '_fbc',
-        'kwai_id', 'kwai_campaign', 'kwai_adset', 'kwai_ad',
-        'sck', 'xcod', 'cv', 'salesCode',
-        'source', 'medium', 'campaign', 'content', 'term',
-        'apx', 'pixel_id'
-      ];
-      
-      var capturedParams = {};
-      
-      paramKeys.forEach(function(key) {
-        var value = urlParams.get(key);
-        if (value) {
-          capturedParams[key] = value;
-        }
-      });
-      
-      if (capturedParams.utm_content) {
-        var parts = capturedParams.utm_content.split('::');
-        if (parts.length === 3) {
-          if (!capturedParams.pixel_id) {
-            capturedParams.pixel_id = parts[2];
-          }
-          if (!capturedParams.click_id && !capturedParams.kwai_click_id) {
-            capturedParams.click_id = parts[1];
-          }
-        }
-      }
-      
-      try {
-        var existing = JSON.parse(sessionStorage.getItem('pressel_utms') || '{}');
-        Object.keys(capturedParams).forEach(function(key) {
-          existing[key] = capturedParams[key];
-        });
-        sessionStorage.setItem('pressel_utms', JSON.stringify(existing));
-        capturedParams = existing;
-      } catch(e) {}
-      
-      return capturedParams;
-    }
-    
-    function buildRedirectUrl(baseUrl, params) {
-      try {
-        var url = new URL(baseUrl);
-        Object.keys(params).forEach(function(key) {
-          if (!url.searchParams.has(key)) {
-            url.searchParams.set(key, params[key]);
-          }
-        });
-        return url.toString();
-      } catch(e) {
-        return baseUrl;
-      }
-    }
-    
-    // ============================================================
-    // EXECUÇÃO PRINCIPAL
-    // ============================================================
-    
-    (function() {
-      console.log('[CLOAK] Iniciando verificação...');
-      
-      // Captura parâmetros
-      var capturedParams = captureParams();
-      
-      // Avalia se é humano mobile
-      var isMobile = isMobileDevice();
-      var isBotUA = isBotUserAgent();
-      var isHeadlessBrowser = isHeadless();
-      var isAdVerifierBot = isAdVerifier();
-      var fastLoad = isFastLoad();
-      var localStorageBlocked = isLocalStorageBlocked();
-      var suspiciousRes = isSuspiciousResolution();
-      
-      var botScore = 0;
-      if (isBotUA) botScore += 3;
-      if (isHeadlessBrowser) botScore += 2;
-      if (isAdVerifierBot) botScore += 5;
-      if (fastLoad) botScore += 1;
-      if (localStorageBlocked) botScore += 1;
-      if (suspiciousRes) botScore += 1;
-      
-      var isHumanMobile = (isMobile && !isBotUA && !isAdVerifierBot && botScore < 3);
-      
-      console.log('[CLOAK] Resultado:', {
-        isMobile: isMobile,
-        isBotUA: isBotUA,
-        isHeadlessBrowser: isHeadlessBrowser,
-        isAdVerifierBot: isAdVerifierBot,
-        botScore: botScore,
-        isHumanMobile: isHumanMobile
-      });
-      
-      // Salva a decisão para usar depois
-      window.__redirectDecision = {
-        isHumanMobile: isHumanMobile,
-        capturedParams: capturedParams
-      };
-      
-      // ============================================================
-      // BARRA DE PROGRESSO - 3 SEGUNDOS EXATOS
-      // ============================================================
-      
-      var progressBar = document.getElementById('progressBar');
-      var statusText = document.getElementById('statusText');
-      var progress = 0;
-      
-      // Calcula o incremento para durar exatamente 3 segundos
-      // 3 segundos = 3000ms, atualizando a cada 30ms = 100 atualizações
-      // Cada atualização = 1% (100 / 100 = 1)
-      var increment = 1;
-      var intervalTime = LOADING_TIME / 100; // 30ms
-      
-      var interval = setInterval(function() {
-        progress += increment;
-        if (progress >= 100) {
-          progress = 100;
-          clearInterval(interval);
-          
-          // 🔥 REDIRECIONA IMEDIATAMENTE APÓS 3 SEGUNDOS
-          executeRedirect();
-          return;
-        }
-        
-        if (progressBar) progressBar.style.width = progress + '%';
-        
-        // Muda o status durante o carregamento
-        if (progress < 30) {
-          statusText.innerHTML = '<span>🔍</span> Verificando dispositivo...';
-        } else if (progress < 60) {
-          statusText.innerHTML = '<span>🛡️</span> Validando segurança...';
-        } else if (progress < 85) {
-          statusText.innerHTML = '<span>✅</span> Análise concluída...';
-        } else {
-          statusText.innerHTML = '<span>🚀</span> Redirecionando...';
-        }
-      }, intervalTime);
-      
-      // ============================================================
-      // FALLBACK: CASO O INTERVAL FALHE, REDIRECIONA APÓS 4 SEGUNDOS
-      // ============================================================
-      
-      var fallbackTimer = setTimeout(function() {
-        console.log('[CLOAK] Fallback: redirecionando por timeout');
-        clearInterval(interval);
-        executeRedirect();
-      }, LOADING_TIME + 1000); // 4 segundos
-      
-      function executeRedirect() {
-        clearTimeout(fallbackTimer);
-        
-        console.log('[CLOAK] Executando redirecionamento...');
-        
-        if (isHumanMobile) {
-          // 🔥 MOBILE → mostra a PRESSEL
-          console.log('[CLOAK] Mobile detectado - mostrando pressel');
-          document.getElementById('loadingScreen').style.display = 'none';
-          document.getElementById('presselScreen').style.display = 'flex';
-          
-          // Dispara evento ViewContent
-          if (typeof window.kwaiPixel !== 'undefined') {
-            try {
-              window.kwaiPixel('track', 'ViewContent', {
-                content_name: 'Acesso Exclusivo',
-                content_category: 'Conteúdo Premium',
-                value: 0.01,
-                currency: 'BRL'
-              });
-            } catch(e) {}
-          }
-        } else {
-          // 🔥 DESKTOP/BOT → redireciona para a WHITE PAGE
-          console.log('[CLOAK] Desktop/Bot detectado - redirecionando para white page');
-          var decoyWithParams = buildRedirectUrl(DECOY_URL, capturedParams);
-          window.location.replace(decoyWithParams);
-        }
-      }
-      
-    })();
-  </script>
-  
-  <!-- ============================================================
-  ESTILO DA TELA DE CARREGAMENTO
-  ============================================================ -->
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Acesso Exclusivo 📸</title>
+
+  <!-- xTracky - Preservação de UTMs -->
+  <script
+    src="https://cdn.jsdelivr.net/gh/xTracky/static@latest/utm-handler.js"
+    data-token="e94dddd7-017b-40cd-8739-52764c9e238a"
+  ></script>
+
+  <!-- Importando fontes premium -->
+  <link rel="preconnect" href="https://fonts.googleapis.com/">
+  <link rel="preconnect" href="https://fonts.gstatic.com/" crossorigin="">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet">
+
   <style>
+    :root {
+      --primary: #dc2626;
+      --primary-light: #ef4444;
+      --primary-glow: rgba(220, 38, 38, 0.4);
+      --bg-dark: #050508;
+      --card-bg: rgba(13, 11, 15, 0.55);
+      --border-color: rgba(239, 68, 68, 0.1);
+      --text-main: #ffffff;
+      --text-muted: #94a3b8;
+      --font-family: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
     * {
       margin: 0;
       padding: 0;
       box-sizing: border-box;
-      -webkit-tap-highlight-color: transparent;
+      font-family: var(--font-family);
     }
-    
-    /* TELA DE CARREGAMENTO */
-    #loadingScreen {
-      min-height: 100vh;
-      display: grid;
-      place-items: center;
-      font-family: Arial, Helvetica, sans-serif;
-      background: radial-gradient(circle at center, #0b1020, #050812);
-      color: #ffffff;
-      overflow: hidden;
-      position: fixed;
-      inset: 0;
-      z-index: 1000;
-    }
-    
-    .loading-container {
-      text-align: center;
-      padding: 40px 30px;
-      max-width: 400px;
-      width: 100%;
-    }
-    
-    .spinner {
-      width: 60px;
-      height: 60px;
-      margin: 0 auto 30px;
-      border: 4px solid rgba(255,255,255,0.08);
-      border-top: 4px solid #7c3aed;
-      border-right: 4px solid #22c55e;
-      border-radius: 50%;
-      animation: spin 0.9s linear infinite;
-    }
-    
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-    
-    .loading-container h1 {
-      font-size: 22px;
-      font-weight: 600;
-      margin-bottom: 12px;
-      color: #ffffff;
-    }
-    
-    .loading-container .sub-text {
-      color: #8d98b5;
-      font-size: 15px;
-      margin-bottom: 30px;
-    }
-    
-    .progress-track {
-      width: 100%;
-      height: 6px;
-      background: rgba(255,255,255,0.06);
-      border-radius: 10px;
-      overflow: hidden;
-      margin-bottom: 16px;
-    }
-    
-    .progress-bar {
-      width: 0%;
-      height: 100%;
-      background: linear-gradient(90deg, #7c3aed, #22c55e);
-      border-radius: 10px;
-      transition: width 0.1s linear;
-    }
-    
-    .status-text {
-      font-size: 14px;
-      color: #6b7a9a;
-      letter-spacing: 0.5px;
-    }
-    
-    .status-text span {
-      color: #4fc3f7;
-    }
-    
-    .footer-loading {
-      margin-top: 30px;
-      font-size: 12px;
-      color: #3d4a6b;
-    }
-    
-    /* ============================================================
-    PRESSEL (só aparece para MOBILE)
-    ============================================================ */
-    #presselScreen {
-      display: none;
-      min-height: 100vh;
-      background: radial-gradient(circle at center top, rgb(26, 26, 26), rgb(13, 13, 13) 70%);
-      font-family: Arial, Helvetica, sans-serif;
-      color: rgb(255, 255, 255);
+
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      display: flex;
       justify-content: center;
       align-items: center;
-      padding: 20px;
+      min-height: 100vh;
+      overflow: hidden;
+      position: relative;
     }
-    
+
+    .blob {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(90px);
+      z-index: 0;
+      opacity: 0.35;
+      pointer-events: none;
+      animation: floatBlob 25s ease-in-out infinite alternate;
+    }
+
+    .blob-1 {
+      width: 320px;
+      height: 320px;
+      background: radial-gradient(circle, rgb(185, 28, 28) 0%, transparent 70%);
+      top: -80px;
+      left: -80px;
+    }
+
+    .blob-2 {
+      width: 380px;
+      height: 380px;
+      background: radial-gradient(circle, rgb(127, 29, 29) 0%, transparent 70%);
+      bottom: -120px;
+      right: -80px;
+      animation-delay: -6s;
+    }
+
+    .blob-3 {
+      width: 250px;
+      height: 250px;
+      background: radial-gradient(circle, rgb(220, 38, 38) 0%, transparent 70%);
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      animation-delay: -12s;
+    }
+
+    @keyframes floatBlob {
+      0% { transform: translate(0px, 0px) scale(1) rotate(0deg); }
+      50% { transform: translate(60px, 40px) scale(1.15) rotate(180deg); }
+      100% { transform: translate(-30px, 50px) scale(0.9) rotate(360deg); }
+    }
+
     .wrapper {
-      max-width: 480px;
-      width: 100%;
-      padding: 40px 25px;
+      position: relative;
+      z-index: 10;
+      max-width: 440px;
+      width: 92%;
+      padding: 40px 30px;
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 24px;
+      backdrop-filter: blur(20px);
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6), 0 0 50px rgba(220, 38, 38, 0.05);
       text-align: center;
-      background: rgba(20, 20, 20, 0.95);
-      border-radius: 16px;
-      box-shadow: rgba(0, 136, 204, 0.3) 0px 0px 40px;
-      border: 1px solid rgba(0, 136, 204, 0.2);
+      animation: cardEntrance 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
     }
-    
-    .logo-container {
+
+    @keyframes cardEntrance {
+      0% { opacity: 0; transform: translateY(30px) scale(0.96); }
+      100% { opacity: 1; transform: translateY(0px) scale(1); }
+    }
+
+    .telegram-logo {
+      width: 75px;
+      height: 75px;
+      margin-bottom: 24px;
+      filter: drop-shadow(0 4px 12px rgba(220, 38, 38, 0.3));
+      animation: floatLogo 5s ease-in-out infinite;
+    }
+
+    @keyframes floatLogo {
+      0%, 100% { transform: translateY(0px) rotate(0deg); }
+      50% { transform: translateY(-8px) rotate(2deg); }
+    }
+
+    h1 {
+      font-size: 26px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      letter-spacing: -0.5px;
+      background: linear-gradient(135deg, #ffffff 40%, #fecaca 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .sub {
+      font-size: 14px;
+      line-height: 1.6;
+      color: var(--text-muted);
+      margin-bottom: 28px;
+      font-weight: 400;
+    }
+
+    .features {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 32px;
+    }
+
+    .feature-item {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 12px 16px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      border-radius: 16px;
+      text-align: left;
+      transition: 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .feature-item:hover {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: rgba(239, 68, 68, 0.25);
+      transform: translateX(4px);
+    }
+
+    .feature-icon {
+      font-size: 20px;
+      background: rgba(255, 255, 255, 0.03);
+      width: 42px;
+      height: 42px;
       display: flex;
       justify-content: center;
-      margin-bottom: 20px;
-    }
-    
-    .telegram-logo {
-      width: 80px;
-      height: 80px;
-    }
-    
-    .wrapper h1 {
-      font-size: 26px;
-      margin-bottom: 10px;
-      color: rgb(0, 136, 204);
-    }
-    
-    .sub {
-      font-size: 15px;
-      color: rgb(204, 204, 204);
-      margin-bottom: 25px;
-      line-height: 1.6;
-    }
-    
-    .sub strong {
-      color: #4fc3f7;
-    }
-    
-    .features {
-      text-align: left;
-      margin-bottom: 25px;
-      background: rgba(255,255,255,0.03);
-      padding: 15px 20px;
+      align-items: center;
       border-radius: 12px;
-      border: 1px solid rgba(255,255,255,0.05);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      flex-shrink: 0;
     }
-    
-    .features p {
-      margin-bottom: 8px;
-      font-size: 14px;
-      color: rgb(221, 221, 221);
+
+    .feature-text h3 {
+      font-size: 13px;
+      font-weight: 600;
+      color: #f8fafc;
+      margin-bottom: 2px;
+    }
+
+    .feature-text p {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .button {
       display: flex;
+      justify-content: center;
       align-items: center;
       gap: 10px;
-    }
-    
-    .features p:last-child {
-      margin-bottom: 0;
-    }
-    
-    .feature-icon {
-      font-size: 18px;
-    }
-    
-    .telegram-required {
-      background: rgba(0, 136, 204, 0.1);
-      border-left: 3px solid #0088cc;
-      padding: 12px 16px;
-      border-radius: 8px;
-      margin-bottom: 20px;
-      text-align: left;
-      font-size: 14px;
-      color: #b0bec5;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-    
-    .telegram-required strong {
-      color: #4fc3f7;
-    }
-    
-    .button {
-      display: block;
       width: 100%;
-      padding: 18px;
-      background: linear-gradient(90deg, rgb(0, 136, 204), rgb(0, 170, 255));
-      border-radius: 12px;
-      text-decoration: none;
-      color: rgb(255, 255, 255);
-      font-weight: bold;
-      font-size: 17px;
-      transition: 0.3s;
-      text-align: center;
-      cursor: pointer;
+      padding: 18px 24px;
+      background: linear-gradient(135deg, var(--primary), var(--primary-light));
       border: none;
+      border-radius: 16px;
+      text-decoration: none;
+      color: #ffffff;
+      font-weight: 700;
+      font-size: 16px;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      box-shadow: 0 4px 18px var(--primary-glow);
+      transition: 0.3s cubic-bezier(0.16, 1, 0.3, 1);
       position: relative;
       overflow: hidden;
     }
-    
+
     .button::after {
-      content: '📱';
-      margin-left: 10px;
+      content: "";
+      position: absolute;
+      top: 0;
+      left: -50%;
+      width: 200%;
+      height: 100%;
+      background: linear-gradient(to right, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.25) 50%, rgba(255, 255, 255, 0) 100%);
+      transform: skewX(-25deg);
+      transition: 0.75s;
+      opacity: 0;
     }
-    
+
     .button:hover {
-      transform: scale(1.03);
-      box-shadow: rgba(0, 136, 204, 0.6) 0px 0px 20px;
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px var(--primary-glow), 0 0 15px rgba(239, 68, 68, 0.4);
     }
-    
-    .button:active {
-      transform: scale(0.97);
+
+    .button:hover::after {
+      left: 125%;
+      opacity: 1;
     }
-    
+
+    .btn-arrow {
+      transition: transform 0.3s;
+    }
+
+    .button:hover .btn-arrow {
+      transform: translateX(4px);
+    }
+
     .footer {
-      font-size: 12px;
-      color: rgb(102, 102, 102);
-      margin-top: 20px;
-      line-height: 1.8;
-    }
-    
-    .footer .highlight {
-      color: #4fc3f7;
-    }
-    
-    .telegram-warning {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      margin-top: 15px;
-      font-size: 12px;
-      color: #ffb74d;
-      background: rgba(255, 183, 77, 0.1);
-      padding: 8px 12px;
-      border-radius: 8px;
-      border: 1px solid rgba(255, 183, 77, 0.2);
-    }
-    
-    @media (max-width: 480px) {
-      .wrapper {
-        padding: 30px 18px;
-      }
-      .wrapper h1 {
-        font-size: 22px;
-      }
-      .features p {
-        font-size: 13px;
-      }
-      .button {
-        font-size: 15px;
-        padding: 16px;
-      }
-      .telegram-logo {
-        width: 70px;
-        height: 70px;
-      }
+      font-size: 11px;
+      color: #64748b;
+      margin-top: 24px;
+      letter-spacing: 0.1px;
+      line-height: 1.4;
     }
   </style>
 </head>
+
 <body>
 
-  <!-- ============================================================
-  TELA DE CARREGAMENTO
-  ============================================================ -->
-  <div id="loadingScreen">
-    <div class="loading-container">
-      <div class="spinner"></div>
-      <h1>Verificando acesso</h1>
-      <p class="sub-text">Aguarde enquanto validamos seu dispositivo...</p>
-      <div class="progress-track">
-        <div class="progress-bar" id="progressBar"></div>
-      </div>
-      <div class="status-text" id="statusText">
-        <span>🔒</span> Iniciando verificação...
-      </div>
-      <div class="footer-loading">
-        Conexão segura • 256-bit encryption
-      </div>
-    </div>
-  </div>
+  <!-- Background glowing blobs -->
+  <div class="blob blob-1"></div>
+  <div class="blob blob-2"></div>
+  <div class="blob blob-3"></div>
 
-  <!-- ============================================================
-  PRESSEL (só aparece para MOBILE)
-  ============================================================ -->
-  <div id="presselScreen">
-    <div class="wrapper">
-      <!-- LOGO -->
-      <div class="logo-container">
-        <img src="https://upload.wikimedia.org/wikipedia/commons/8/82/Telegram_logo.svg" class="telegram-logo" alt="Telegram Logo">
-      </div>
+  <div class="wrapper">
 
-      <h1>Conteúdo Exclusivo 📸</h1>
+    <!-- LOGO TELEGRAM -->
+    <svg class="telegram-logo" viewBox="0 0 240 240" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="linear-gradient" x1="120" y1="240" x2="120" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stop-color="#990000"></stop>
+          <stop offset="1" stop-color="#ff3333"></stop>
+        </linearGradient>
+      </defs>
+      <circle cx="120" cy="120" r="120" fill="url(#linear-gradient)"></circle>
+      <path d="M81.229,128.772l14.237,39.406s1.78,3.687,3.686,3.687,30.255-29.492,30.255-29.492l31.525-60.89L81.737,118.6Z" fill="#c8daea"></path>
+      <path d="M100.106,138.878l-2.733,29.046s-1.144,8.9,7.754,0,17.415-15.763,17.415-15.763" fill="#a9c6d8"></path>
+      <path d="M81.486,130.178,52.2,120.636s-3.5-1.42-2.373-4.64c.232-.664.7-1.229,2.1-2.2,6.489-4.523,120.106-45.36,120.106-45.36s3.208-1.081,5.1-.362a2.766,2.766,0,0,1,1.885,2.055,9.357,9.357,0,0,1,.254,2.585c-.009.752-.1,1.449-.169,2.542-.692,11.165-21.4,94.493-21.4,94.493s-1.239,4.876-5.678,5.043A8.13,8.13,0,0,1,146.1,172.5c-8.711-7.493-38.819-27.727-45.472-32.177a1.27,1.27,0,0,1-.546-.9c-.093-.469.417-1.05.417-1.05s52.426-46.6,53.821-51.492c.108-.379-.3-.566-.848-.4-3.482,1.281-63.844,39.4-70.506,43.607A3.21,3.21,0,0,1,81.486,130.178Z" fill="#fff"></path>
+    </svg>
 
-      <p class="sub">
-        <strong>Acesso liberado apenas para usuários do Telegram</strong><br>
-        Clique no botão e entre no canal privado.
-      </p>
+    <h1>Acesso Restrito 🔒</h1>
 
-      <!-- REQUISITO TELEGRAM -->
-      <div class="telegram-required">
-        <span style="font-size:24px;">📲</span>
-        <div>
-          <strong>É necessário ter o Telegram instalado</strong><br>
-          <span style="font-size:13px; color:#90a4ae;">O conteúdo é disponibilizado exclusivamente dentro do app</span>
+    <p class="sub">Para continuar, é necessário iniciar o bot oficial no Telegram e confirmar sua entrada. O acesso é liberado somente após ativação.</p>
+
+    <div class="features">
+      <div class="feature-item">
+        <span class="feature-icon">🔞</span>
+        <div class="feature-text">
+          <h3>Conteúdo Exclusivo</h3>
+          <p>Acesso total a fotos e vídeos restritos</p>
         </div>
       </div>
-
-      <div class="features">
-        <p><span class="feature-icon">🔞</span> Conteúdos exclusivos +18</p>
-        <p><span class="feature-icon">📱</span> Acesso direto pelo Telegram</p>
-        <p><span class="feature-icon">🎥</span> Atualizações diárias</p>
-        <p><span class="feature-icon">⚡</span> Vagas limitadas por dia</p>
+      <div class="feature-item">
+        <span class="feature-icon">💬</span>
+        <div class="feature-text">
+          <h3>Acesso Direto</h3>
+          <p>Interação rápida diretamente pelo bot</p>
+        </div>
       </div>
-
-      <!-- BOTÃO PRINCIPAL -->
-      <a href="#" class="button" id="btnAcesso">
-        ENTRAR NO TELEGRAM AGORA
-      </a>
-
-      <!-- AVISO -->
-      <div class="telegram-warning">
-        <span>⚠️</span>
-        <span>Baixe o Telegram antes de clicar se ainda não tiver</span>
+      <div class="feature-item">
+        <span class="feature-icon">🎥</span>
+        <div class="feature-text">
+          <h3>Atualizações Frequentes</h3>
+          <p>Novas mídias adicionadas com frequência</p>
+        </div>
       </div>
-
-      <div class="footer">
-        🔐 Ao clicar você será redirecionado para o canal exclusivo<br>
-        <span class="highlight">Apenas usuários com Telegram instalado conseguem acessar</span>
+      <div class="feature-item">
+        <span class="feature-icon">⚠️</span>
+        <div class="feature-text">
+          <h3>Disponibilidade Limitada</h3>
+          <p>Garanta sua vaga antes que encerre</p>
+        </div>
       </div>
     </div>
+
+    <!-- 🔥 NOVO LINK DE REDIRECIONAMENTO - O xTracky vai adicionar os parâmetros automaticamente -->
+    <a href="https://apextry.com/go/kwai18" class="button" id="ctaButton">
+      <span>ACESSAR CONTEÚDO AGORA</span>
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="btn-arrow">
+        <line x1="5" y1="12" x2="19" y2="12"></line>
+        <polyline points="12 5 19 12 12 19"></polyline>
+      </svg>
+    </a>
+
+    <div class="footer">
+      Você será redirecionado para o Telegram com segurança.
+    </div>
+
   </div>
 
-  <!-- ============================================================
-  SCRIPT DO BOTÃO DA PRESSEL
-  ============================================================ -->
+  <!-- Script para atualizar o link com os parâmetros UTM -->
   <script>
     (function() {
-      // Recupera os parâmetros salvos
-      var capturedParams = {};
-      try {
-        capturedParams = JSON.parse(sessionStorage.getItem('pressel_utms') || '{}');
-      } catch(e) {}
-      
-      function buildRedirectUrl(baseUrl) {
-        try {
-          var url = new URL(baseUrl);
-          Object.keys(capturedParams).forEach(function(key) {
-            if (!url.searchParams.has(key)) {
-              url.searchParams.set(key, capturedParams[key]);
-            }
-          });
-          return url.toString();
-        } catch(e) {
-          return baseUrl;
-        }
-      }
-      
-      var btn = document.getElementById('btnAcesso');
-      if (btn) {
-        btn.addEventListener('click', function(e) {
-          e.preventDefault();
-          
-          // Dispara evento ViewContent
-          if (typeof window.kwaiPixel !== 'undefined') {
-            try {
-              window.kwaiPixel('track', 'ViewContent', {
-                content_name: 'Acesso Exclusivo Telegram',
-                content_category: 'Conteúdo Premium',
-                value: 0.01,
-                currency: 'BRL'
-              });
-            } catch(e) {}
+      // Função para pegar todos os parâmetros da URL atual
+      function getUrlParams() {
+        var params = {};
+        var queryString = window.location.search;
+        if (queryString) {
+          var pairs = queryString.substring(1).split('&');
+          for (var i = 0; i < pairs.length; i++) {
+            var pair = pairs[i].split('=');
+            var key = decodeURIComponent(pair[0]);
+            var value = decodeURIComponent(pair[1] || '');
+            params[key] = value;
           }
-          
-          // Constrói URL com parâmetros e redireciona
-          var finalUrl = buildRedirectUrl(OFFER_URL);
-          console.log('[CLOAK] Redirecionando para:', finalUrl);
-          window.location.href = finalUrl;
-        });
+        }
+        return params;
+      }
+
+      // Função para construir a URL com parâmetros
+      function buildRedirectUrl(baseUrl, params) {
+        var url = new URL(baseUrl);
+        for (var key in params) {
+          if (params.hasOwnProperty(key) && params[key] !== '') {
+            url.searchParams.set(key, params[key]);
+          }
+        }
+        return url.toString();
+      }
+
+      // Atualiza o link do botão
+      var button = document.getElementById('ctaButton');
+      if (button) {
+        var baseUrl = button.getAttribute('href');
+        var params = getUrlParams();
+        var newUrl = buildRedirectUrl(baseUrl, params);
+        button.setAttribute('href', newUrl);
+        console.log('🔗 Link atualizado:', newUrl);
+        console.log('📊 Parâmetros capturados:', params);
       }
     })();
   </script>
+
 </body>
 </html>
